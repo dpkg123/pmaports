@@ -244,6 +244,7 @@ _audio_pipewire() {
 	depends="pipewire-alsa pipewire-pulse pipewire-spa-bluez"
 	provides="postmarketos-base-ui-audio=$pkgver-r$pkgrel"
 	provider_priority=90
+	install="$subpkgname.post-install $subpkgname.pre-deinstall"
 
 	amove usr/share/wireplumber/wireplumber.conf.d/50-bluetooth.conf
 }
