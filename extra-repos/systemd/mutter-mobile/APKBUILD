@@ -3,7 +3,7 @@
 pkgname=mutter-mobile
 pkgver=99946.0
 _pkgver=46.0
-pkgrel=1
+pkgrel=2
 pkgdesc="clutter-based window manager and compositor"
 url="https://wiki.gnome.org/Projects/Mutter/"
 # ricsv64: doesn't build currently:
@@ -70,6 +70,11 @@ subpackages="$pkgname-dbg $pkgname-dev $pkgname-doc $pkgname-lang $pkgname-schem
 _commit="46-mobile-0"
 source="mutter-mobile-$_commit.tar.gz::https://gitlab.gnome.org/verdre/mutter-mobile/-/archive/$_commit/mutter-mobile-$_commit.tar.gz
 	pcversion.patch
+	0001-xdg-shell-disable-pinging-of-windows.patch
+	0002-window-force-geometry-scale-for-alien-windows-to-1.patch
+	0003-window-wayland-disable-xdg_toplevel_minimize.patch
+	0004-wayland-text-input-small-improvements-which-are-hope.patch
+	0005-wayland-text-input-replace-focus-for-aliendalvik-wit.patch
 	"
 builddir="$srcdir/mutter-mobile-$_commit"
 
@@ -122,4 +127,9 @@ package() {
 sha512sums="
 97de32571ca2aeeee4d213e085fc22d0c9f669ec8d24219a5a4205f21a2e0b261f8e6d042248262926df27e0530b7a0501922d1efde5278f8c23507909d1fa84  mutter-mobile-46-mobile-0.tar.gz
 2f2379d1f6676c69ba182d008d44c3d216ba5044af56352c785f4c34d17aeb0ac98a539827371d06ade7c2b42b06f916753c736167d2d89c0053b0a0e738c5d5  pcversion.patch
+02b3e2416d08795dee58770ba72fa43961d16519b8833146e4e67913809babd667e4271be065c5f68aedb06888d08150f9ee89b080469c49b1363b6c4d74af32  0001-xdg-shell-disable-pinging-of-windows.patch
+abc52ed7ec9de288ccb4e433306c68cbc6c6cf31d6ff84aa99c2ea78831de2d57f047889edf816d2dee6dc9194d1d4fb953b271a9614a63259c2ec90edd5427a  0002-window-force-geometry-scale-for-alien-windows-to-1.patch
+9a188a124c7bf76f516afca6433a92505bd56e55618979c6efcf1c33dce7e81037bd6ae599ed91d3dfa94c5e6f5893f40b0f05c0bc726a02bd582c5d939bdd1c  0003-window-wayland-disable-xdg_toplevel_minimize.patch
+ecff97a82e28d52bad866d32963b994572e9e6f9a331bd52149b1c95cb7561a41ae2ba9f74c38c0686039a0cce2c8d8fbbc951870d1aced4ffbece025d0f41a5  0004-wayland-text-input-small-improvements-which-are-hope.patch
+23772ec7d2ea1a3da79f66b757ae0aa41663c240b6bc1bd7494219eff0ab13f1932c125c24b085926693c332bc53cb6b5c61bf05b1830f5aabc71371a2d07aef  0005-wayland-text-input-replace-focus-for-aliendalvik-wit.patch
 "
