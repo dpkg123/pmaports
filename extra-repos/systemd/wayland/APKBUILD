@@ -1,0 +1,79 @@
+# Forked for Alien Dalvik patches
+# FIXME: keep version aligned with upstream and auto-bump
+pkgname=wayland
+pkgver=9991.23.0
+_pkgver=1.23.0
+pkgrel=0
+pkgdesc="A computer display server protocol"
+url="https://wayland.freedesktop.org"
+arch="all"
+license="MIT"
+options="!check"
+depends_dev="
+	expat-dev
+	libffi-dev
+	"
+makedepends="
+	$depends_dev
+	libxml2-dev
+	meson
+	"
+subpackages="
+	$pkgname-dbg
+	$pkgname-dev
+	$pkgname-libs-client:_libs
+	$pkgname-libs-egl:_libs
+	$pkgname-libs-cursor:_libs
+	$pkgname-libs-server:_libs
+	"
+source="https://gitlab.freedesktop.org/wayland/wayland/-/releases/$_pkgver/downloads/wayland-$_pkgver.tar.xz
+	0001-server-don-t-be-so-angry-about-client-errors.patch
+	0002-don-t-offer-zwp_text_input_v3-to-alien-clients.patch
+"
+builddir="$srcdir/wayland-$_pkgver"
+
+build() {
+	abuild-meson \
+		-Db_lto=true \
+		-Ddocumentation=false \
+		. output
+
+	meson compile -C output
+}
+
+check() {
+	XDG_RUNTIME_DIR="$(mktemp -d)" \
+	meson test --no-rebuild --print-errorlogs -C output
+}
+
+package() {
+	depends="
+		$pkgname-libs-client=$_pkgver-r$pkgrel
+		$pkgname-libs-cursor=$_pkgver-r$pkgrel
+		$pkgname-libs-egl=$_pkgver-r$pkgrel
+		$pkgname-libs-server=$_pkgver-r$pkgrel
+		"
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+}
+
+dev() {
+	amove usr/share
+	amove usr/bin
+	default_dev
+}
+
+_libs() {
+	depends=
+	local name=${subpkgname#"$pkgname"-libs-}
+	pkgdesc="$pkgdesc ($name library)"
+	case "$name" in
+		egl) replaces="mesa-libwayland-egl";;
+	esac
+	amove usr/lib/*-$name.so.*
+}
+
+sha512sums="
+9c525231a7ea3e68d3178230d476285a960d23e38571ac96d885f86c0588c52ef01460bff6833db5adb9456ce8db7b996613611187aac972736748ba91b8fd81  wayland-1.23.0.tar.xz
+bc1c8474755768d09d91a280e4794dce6dd4e1933a3f80dfa5852f1f88329db5d0f62265e741e960c597f0b4b0a19550b151d053cb894b9030760f2b2e3961a1  0001-server-don-t-be-so-angry-about-client-errors.patch
+6014c5dfaea7fb3a40fba41cfb5cd04b626275f727cac40d0911b80644be89062a4a0dd1d3d038c425cdbb6610a99fbd72d3ad32391e63425e30305b68240366  0002-don-t-offer-zwp_text_input_v3-to-alien-clients.patch
+"
