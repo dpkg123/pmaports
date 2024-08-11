@@ -12,8 +12,8 @@ _commit="b23003b2a8fa8f71374c72d69cfdbfd048e63c33"
 _muppets_commit="c7757f14a4eea2276d3ee6f6055621deff0ed32e"
 
 source="
-    $pkgname-$_commit.tar.gz::$url/-/archive/$_commit/$pkgname-$_commit.tar.gz
-    $pkgname-$_muppets_commit.tar.gz::https://github.com/TheMuppets/proprietary_vendor_xiaomi_wayne-common/archive/$_muppets_commit.tar.gz
+	$pkgname-$_commit.tar.gz::$url/-/archive/$_commit/$pkgname-$_commit.tar.gz
+	$pkgname-$_muppets_commit.tar.gz::https://github.com/TheMuppets/proprietary_vendor_xiaomi_wayne-common/archive/$_muppets_commit.tar.gz
 "
 
 builddir="src"
@@ -25,7 +25,7 @@ package() {
 		--set-wmi-op-version=tlv --set-htt-op-version=tlv \
 		--set-fw-api=5
 	install -Dm644 firmware-5.bin -t "$pkgdir/$_fwdir/ath10k/WCN3990/hw1.0/"
-    install -Dm644 $pkgname-$_commit/board-2.bin -t "$pkgdir/$_fwdir/ath10k/WCN3990/hw1.0/"
+	install -Dm644 $pkgname-$_commit/board-2.bin -t "$pkgdir/$_fwdir/ath10k/WCN3990/hw1.0/"
 	install -Dm644 proprietary_vendor_xiaomi_wayne-common-$_muppets_commit/proprietary/vendor/firmware/a512_zap.elf "$pkgdir/$_fwdir/postmarketos/a512_zap.mbn"
 }
 
