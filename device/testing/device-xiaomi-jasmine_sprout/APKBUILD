@@ -1,0 +1,38 @@
+# Reference: <https://postmarketos.org/devicepkg>
+pkgname=device-xiaomi-jasmine_sprout
+pkgdesc="Xiaomi Mi A2"
+pkgver=2
+pkgrel=1
+url="https://postmarketos.org"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck"
+depends="
+	firmware-xiaomi-jasmine_sprout
+	firmware-qcom-adreno-a530
+	linux-postmarketos-qcom-sdm660
+	mkbootimg
+	msm-firmware-loader
+	postmarketos-base
+	soc-qcom-sdm660
+	soc-qcom-sdm660-rproc
+
+"
+makedepends="devicepkg-dev"
+source="
+	deviceinfo
+	modules-initfs
+"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+}
+
+sha512sums="
+937da4f334c5b00c4784742c503a0f660056cfd4c2aa381d29946cd5fca03025f47a7fd6ddf3ff3f33c1943a810dfccb13710474c94748faa3ed43a2fcbd0f11  deviceinfo
+0900c2f930d1c3f2a6a2b9b8b35ecfe54a1d3aa1932f9dbea55a85c68c502f59c8d1a0196f15834ffd16d31bc073247c7c841279efb8aed81af2487f89442963  modules-initfs
+"
