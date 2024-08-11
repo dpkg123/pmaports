@@ -1,6 +1,6 @@
 pkgname=firmware-xiaomi-jasmine_sprout
 pkgver=1
-pkgrel=0
+pkgrel=1
 pkgdesc="Firmware files for Xiaomi Mi A2"
 url="https://gitlab.com/m.01001101.01010110/$pkgname"
 arch="aarch64"
