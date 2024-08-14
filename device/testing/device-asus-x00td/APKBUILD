@@ -26,13 +26,13 @@ package() {
 
 kernel_downstream() {
 	pkgdesc="LineageOS downstream kernel (recommended)"
-	depends="linux-asus-x00td msm-fb-refresher"
+	depends="linux-asus-x00td msm-fb-refresher firmware-qcom-adreno-a530 msm-firmware-loader soc-qcom-sdm660 soc-qcom-sdm660-rproc"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
 
 kernel_mainline() {
 	pkgdesc="Close to mainline; for kernel development only (most features aren't working)"
-	depends="linux-postmarketos-qcom-sdm660"
+	depends="linux-postmarketos-qcom-sdm660 firmware-qcom-adreno-a530 msm-firmware-loader soc-qcom-sdm660 soc-qcom-sdm660-rproc"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
 
