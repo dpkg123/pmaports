@@ -32,7 +32,7 @@ kernel_downstream() {
 
 kernel_mainline() {
 	pkgdesc="Close to mainline; for kernel development only (most features aren't working)"
-	depends="linux-postmarketos-qcom-sdm660 firmware-qcom-adreno-a530 msm-firmware-loader soc-qcom-sdm660 soc-qcom-sdm660-rproc"
+	depends="linux-postmarketos-qcom-sdm660 soc-qcom-sdm660 soc-qcom-sdm660-rproc"
 	devicepkg_subpackage_kernel $startdir $pkgname $subpkgname
 }
 
