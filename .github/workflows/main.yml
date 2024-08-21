@@ -1,0 +1,55 @@
+name: Sync GitLab to GitHub
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0,6,12,18 * * *'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout GitHub repository
+        uses: actions/checkout@v4
+        with:
+          repository: dpkg123/pmaports
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "syncbot"
+          git config --global user.email "your_email@example.com"
+      - name: Add GitLab remote
+        run: git remote add gitlab https://gitlab.com/postmarketos/pmaports.git && git pull
+
+      - name: Fetch from GitLab
+        run: git fetch gitlab --prune && git pull
+
+      - name: Merge
+        continue-on-error: true
+        run: |
+           git merge gitlab/master --no-commit --no-ff  ||  git commit -m "Merge changes from GitLab at $(date)"
+
+      - name: Commit changes
+        continue-on-error: true
+        run: |
+           git commit -m "Merge changes from GitLab at $(date)"
+
+      - name: GitHub Push
+        continue-on-error: true
+        uses: ad-m/github-push-action@master
+        with:
+          force: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: GitHub Push if failure 
+        continue-on-error: true
+        if: failure()
+        uses: ad-m/github-push-action@master
+        with:
+          force: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
