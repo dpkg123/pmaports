@@ -1,7 +1,7 @@
 # Maintainer: Clayton Craft <clayton@craftyguy.net>
 pkgname=postmarketos-base-ui
 pkgver=28
-pkgrel=2
+pkgrel=4
 pkgdesc="Meta package for minimal postmarketOS UI base"
 url="https://postmarketos.org"
 arch="noarch"
@@ -42,7 +42,6 @@ subpackages="
 	$pkgname-wifi-wpa_supplicant-openrc:wpa_supplicant_openrc
 	$pkgname-wifi-wpa_supplicant:wpa_supplicant
 	$pkgname-x11
-	postmarketos-default-camera:_default_camera
 	"
 replaces="
 	chrony
@@ -213,12 +212,6 @@ networkmanager() {
 	amove usr/lib/NetworkManager/dispatcher.d/50-dns-filter.sh
 }
 
-_default_camera() {
-	# dummy package for camera app, packages can install_if on this to install
-	# the appropriate camera app for that device/UI
-	mkdir "$subpkgdir"
-}
-
 qt_tweaks() {
 	amove etc/profile.d/qt-mobile-controls.sh
 }
@@ -238,7 +231,7 @@ wpa_supplicant() {
 }
 
 wpa_supplicant_openrc() {
-	install_if="$pkgname-wpa_supplicant=$pkgver-r$pkgrel openrc"
+	install_if="$pkgname-wifi-wpa_supplicant=$pkgver-r$pkgrel openrc"
 	install="$subpkgname.post-install $subpkgname.post-upgrade"
 
 	depends="wpa_supplicant-openrc openrc"
@@ -261,7 +254,7 @@ iwd() {
 }
 
 iwd_openrc() {
-	install_if="$pkgname-iwd=$pkgver-r$pkgrel openrc"
+	install_if="$pkgname-wifi-iwd=$pkgver-r$pkgrel openrc"
 	install="$subpkgname.post-install $subpkgname.post-upgrade"
 
 	depends="iwd-openrc openrc"
