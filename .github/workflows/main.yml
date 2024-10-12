@@ -21,10 +21,10 @@ jobs:
 
       - name: Setup Git
         run: |
-          git config --global user.name "syncbot"
+          git config --global user.name "root"
           git config --global user.email "your_email@example.com"
       - name: Add GitLab remote
-        run: git remote add gitlab https://gitlab.com/postmarketos/pmaports.git && git pull
+        run: git remote add gitlab https://gitlab.postmarketos.org/postmarketOS/pmaports/ && git pull
 
       - name: Fetch from GitLab
         run: git fetch gitlab --prune && git pull
@@ -32,7 +32,7 @@ jobs:
       - name: Merge
         continue-on-error: true
         run: |
-           git merge gitlab/master --no-commit --no-ff  ||  git commit -m "Merge changes from GitLab at $(date)"
+           git merge gitlab/master --no-commit --no-ff  ||  git commit -m "Merge changes from PostmarketOS official git web service at $(date)"
 
       - name: Commit changes
         continue-on-error: true
