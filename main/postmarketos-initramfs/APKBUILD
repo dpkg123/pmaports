@@ -1,8 +1,8 @@
 # Maintainer: Caleb Connolly <caleb@postmarketos.org>
 # Co-Maintainer: Clayton Craft <clayton@craftyguy.net>
 pkgname=postmarketos-initramfs
-pkgver=3.3.5
-pkgrel=3
+pkgver=3.4.0
+pkgrel=1
 pkgdesc="Base files for the postmarketOS initramfs / initramfs-extra"
 url="https://postmarketos.org"
 options="!check"  # no tests
@@ -42,6 +42,9 @@ source="
 	00-initramfs-extra-base.files
 	init.sh
 	init_functions.sh
+	init_2nd.sh
+	init_functions_2nd.sh
+	mdev.conf
 	unudhcpd.conf
 	"
 arch="noarch"
@@ -59,11 +62,21 @@ package() {
 	install -Dm644 "$srcdir/unudhcpd.conf" \
 		"$pkgdir/etc/unudhcpd.conf"
 
+	install -Dm644 "$srcdir"/mdev.conf \
+		-t "$pkgdir"/usr/share/initramfs/
+
+
 	install -Dm644 "$srcdir/init_functions.sh" \
 		"$pkgdir/usr/share/initramfs/init_functions.sh"
 
+	install -Dm644 "$srcdir/init_functions_2nd.sh" \
+		"$pkgdir/usr/share/initramfs/init_functions_2nd.sh"
+
 	install -Dm755 "$builddir/init.sh" \
 		"$pkgdir/usr/share/initramfs/init.sh"
+
+	install -Dm755 "$srcdir/init_2nd.sh" \
+		"$pkgdir/usr/share/initramfs/init_2nd.sh"
 
 	install -Dm644 "$srcdir"/00-initramfs-base.dirs \
 		-t "$pkgdir"/usr/share/mkinitfs/dirs/
@@ -90,9 +103,12 @@ package() {
 sha512sums="
 20bc7a21f4f59548b8179c5cb1fc2b3db64eb355988bce992db3bc4075d65b4135ff9dd7d754215d0402978811494449cce476a26cda6bb2f0f8b53ae8e36bd7  00-default.modules
 9c0e8f6f61d5da191e03a1aa9d5d0ceb5baf1eae6dbb9bfb0af59817783525119ac8394b135f303f7b6434a3eab0b49185fb90379e06823db847a4999c75ce33  00-initramfs-base.dirs
-0f4c14b63ba22bbf6466f3b9b3c46e2a8cdd9f53600e3d5536288af1f37ae1b10efd0d038ed0669b3c128eb056758e7f1dbbcc6ef5768a27775776f8f11b2fdc  00-initramfs-base.files
-c4ce6c9ef5b1aa8fce0937676eb68f0172474cb86f2ab9d839f327b1c58f22ed6ae2a48133dd1c04ede33324ce82f78863f68ab6e62f88b716964b3b84f0ae9e  00-initramfs-extra-base.files
-7ea2c318e3b63b84ba8eb09e31dd74cdd9c86f5f4d8970ab54bb9213930e913c09728b60d429828007ea2dbb0472fd50dc3daae2efbe307babf854e4d8ecb238  init.sh
-6ccfbf84dd0315bfe2d9556ddfaaa2533ac4d1ab2055bb04e321cf945ae3ecbf6dc2c5e14a836cbc62f28da9eec1136a25d49764b330019bd04b918c8d36e6c6  init_functions.sh
+c0233d22858a5901db64e1d2fe1f6d39a2e2cfd1b94a10932483f55fed9461e9b8aa2d73b154b9d99a7a8b49ee02abfbddfe917ce0c6d7576601ba2668589c01  00-initramfs-base.files
+d0db184a5af00047b5f2c4ae869324968cdd396a17ed2c146e2523669bcf25f9ffd805eba2ec01ea74850ec674e6d0a490cdba7dcbb264bb5c512af3b212f166  00-initramfs-extra-base.files
+5dc7d65e3e6f0df07d2f7ba661dfb6714a3c3bae6a9845a6d116582780ea69e34ba5950e30fc8dd0a4852e8f2b8b1ae9ff2ea962c4c4e4b34df5e3c30d8bbb3d  init.sh
+bbfbec0690386e81d1a43420e7898a1e32fdf10eab88dc8d1d500a5def84c60a6dbb7055f66dc163429faf46d540dd4e8e44642b27743ea783eed6b41e0ff019  init_functions.sh
+18a0ca97bca094aeb8cb1c2582205ac0aff131085c39f1715246541cacfb35434aba515cd5d338703843efb36b9effd494a51361c51fb39be6052ad866346d3d  init_2nd.sh
+30fb52456376020e70116169752582d25a011a858111a347c2e53eccaddea8765fab502371cfdc0c2a8ca93034795b7e689e4cd3393ad601268c02024c4e84ab  init_functions_2nd.sh
+675e7d5bee39b2df7d322117f8dcaccc274d61beaf4d50ead19bbf2109446d64b1c0aa0c5b4f9846eb6c1c403418f28f6364eff4537ba41120fbfcbc484b7da7  mdev.conf
 ba3275a9af788c7c782322a22a0f144d5e50e3498ea6886486a29331f23ae89cd32d500a3635cfa7cab369afba92edc18aeca64ccbf0cd589061cce23d15b46c  unudhcpd.conf
 "
