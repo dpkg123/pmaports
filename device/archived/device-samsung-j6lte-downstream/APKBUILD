@@ -1,21 +1,23 @@
 # Reference: <https://postmarketos.org/devicepkg>
-pkgname=device-samsung-a2corelte
-pkgdesc="Samsung Galaxy A2 Core"
-pkgver=2
+pkgname=device-samsung-j6lte-downstream
+pkgdesc="Samsung Galaxy J6 (2018)"
+pkgver=1
 pkgrel=0
 url="https://postmarketos.org"
 license="MIT"
 arch="aarch64"
 options="!check !archcheck"
 depends="
-	dtbtool-exynos
-	linux-postmarketos-exynos7870
-	mesa-dri-simpledrm
+	linux-samsung-j6lte-downstream
 	mkbootimg
 	postmarketos-base
+	postmarketos-base-downstream
+	msm-fb-refresher
 "
 makedepends="devicepkg-dev"
-source="deviceinfo"
+source="
+	deviceinfo
+"
 subpackages="$pkgname-nonfree-firmware:nonfree_firmware"
 
 build() {
@@ -27,11 +29,11 @@ package() {
 }
 
 nonfree_firmware() {
-	pkgdesc="Proprietary firmware blobs for $pkgdesc"
-	depends="firmware-samsung-a2corelte"
+	pkgdesc="$pkgdesc (WiFi firmware)"
+	depends="firmware-samsung-j6lte-downstream"
 	mkdir "$subpkgdir"
 }
 
 sha512sums="
-5f70d4c77f8d7b0367d2d07c972cded1bdaee445cd270187edd73d6010736746690924a4cc613b1e3e55453e9c5da70c8fae5ce7cee55bc09f92f70758653330  deviceinfo
+5bbe8f6840d75c4d8693fbe62afaf071cddaef750aee2f9cae31187489a2b05873369ee06bf5292ec484a70f6d5ac7aea7862fc27f7fc3057205afda52996d7e  deviceinfo
 "
