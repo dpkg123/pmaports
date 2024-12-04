@@ -2,8 +2,8 @@
 # Maintainer: Sicelo <absicsz@gmail.com>
 # Co-Maintainer: Danct12 <danct12@disroot.org>
 pkgname=device-nokia-n900
-pkgver=30
-pkgrel=1
+pkgver=35
+pkgrel=0
 pkgdesc="Nokia N900"
 url="https://postmarketos.org"
 arch="armv7"
@@ -28,7 +28,6 @@ subpackages="
 	$pkgname-xkeyboard-config:xkeyboard_config
 	$pkgname-i3wm
 	$pkgname-upower
-	$pkgname-sxmo
 	$pkgname-openrc
 "
 source="
@@ -39,6 +38,8 @@ source="
 	asound.state.headset
 	asound.state.speakers
 	backlight-enable.sh
+	bq27k-options.conf
+	bq27k-monitor.sh
 	device-nokia-n900.start
 	deviceinfo
 	modules-initfs
@@ -61,10 +62,9 @@ source="
 	modules.blocklist
 	pointercal
 	proxishot.sh
-	sxmo/deviceprofile.sh
-	sxmo/start_hook.sh
 	uboot-script.cmd
 	udev/10-nokia-modem.rules
+	udev/15-bq27k.rules
 	udev/80-feedbackd-twl4030.rules
 	udev/90-touchscreen-dev.rules
 	upower.conf
@@ -104,12 +104,16 @@ package() {
 		"$pkgdir"/usr/share/mkinitfs/hooks/10-initfs-keymap.sh
 	install -Dm755 "$srcdir"/$pkgname.start \
 		"$pkgdir"/etc/local.d/$pkgname.start
+	install -Dm755 "$srcdir"/bq27k-monitor.sh \
+		"$pkgdir"/usr/bin/bq27k-monitor
 
 	# Udev rules
 	install -D -m644 "$srcdir"/90-touchscreen-dev.rules \
 		"$pkgdir"/etc/udev/rules.d/90-touchscreen-dev.rules
 	install -D -m644 "$srcdir"/10-nokia-modem.rules \
 		"$pkgdir"/etc/udev/rules.d/10-nokia-modem.rules
+	install -D -m644 "$srcdir"/15-bq27k.rules \
+		"$pkgdir"/usr/lib/udev/rules.d/15-bq27xxx-battery.rules
 	install -Dm644 "$srcdir"/80-feedbackd-twl4030.rules \
 		"$pkgdir"/usr/lib/udev/rules.d/80-feedbackd-twl4030.rules
 
@@ -136,6 +140,8 @@ package() {
 		"$pkgdir"/etc/modprobe.d/nokia-modem.conf
 	install -D -m644 "$srcdir"/modules.blocklist \
 		"$pkgdir"/etc/modprobe.d/n900-module-blocklist.conf
+	install -D -m644 "$srcdir"/bq27k-options.conf \
+		"$pkgdir"/etc/modprobe.d/bq27xxx-battery.conf
 
 	postmarketos-mvcfg-package "$pkgdir" "$pkgname"
 }
@@ -186,20 +192,6 @@ i3wm() {
 		"$subpkgdir"/etc/skel/.Xdefaults
 }
 
-sxmo() {
-	install_if="$pkgname=$pkgver-r$pkgrel sxmo-utils"
-	replaces="sxmo-utils"
-	# Set !tracedeps, so abuild doesn't extend provides with e.g.:
-	# "cmd:sxmo_deviceprofile_nokia,omap3-n900.sh=1.16.3-r0"
-	# Otherwise this cannot be installed together with sxmo-utils:
-	# conflicts: sxmo-utils-1.16.3-r0[cmd:sxmo_deviceprofile_nokia,omap3-n900.sh=25-r0]
-	options="!tracedeps"
-	install -Dm755 "$srcdir"/deviceprofile.sh \
-		"$subpkgdir"/usr/bin/sxmo_deviceprofile_nokia,omap3-n900.sh
-	install -Dm755 "$srcdir"/start_hook.sh \
-		"$subpkgdir"/usr/share/sxmo/default_hooks/sxmo_hook_start.sh
-}
-
 upower() {
 	install_if="$pkgname=$pkgver-r$pkgrel upower"
 	replaces="upower"
@@ -222,6 +214,8 @@ ff51909873160c2d4c6f0c0119b6d4a02751df29f571b8596b4bc8b04ce2541913c11a583b0e5dab
 5b87071834313a389f83d29f86f6e3ea108d0921f17dc918be7a46de7e74c73a4418044ef600a0fbf72c8fad22b7730dcd5bfe3d6d01d76bf01556f8540f0b32  asound.state.headset
 67acc17a33bc75113300393b4a5bba15319014032407e774d079abf310368e75f4f697dbb4856ba2d2d8ea184b056bb33561f42918de3ee91ab6a77df89a133c  asound.state.speakers
 3d55e34b95791636e44a5f41754f3d0de039dbba41f7a556d43a95c9e64afcfa930046b4b96b40020b6f196096ffba93514682927e32fa4488686fdd19c6da5a  backlight-enable.sh
+344ec50cee2a4d864debad12810a83070ab8257f9f07dcfa9be3eea1d8b26f3ab4fbe322fe05a384152b40fc5e1481df51d191624c7062186dd70f95a0784ea8  bq27k-options.conf
+c5b8e03ca9f720a794f2593a3e938640cbd91ac44dd761079bbf4614a0d288a9d7b72de8ed2493c062dc9f37be580bea529f454d2335f55b7a9f4d14024b42a9  bq27k-monitor.sh
 e6bbac8de1a198ba716f44ade76606e1e0adcc574156b855ac41be5eb5308389d3277fd89cc34b119fbc33d9801ab9f79a6ff213392596bff40bc17e931c05ef  device-nokia-n900.start
 40aaeb44941a988ab8ec58d331bc6cd42c4a23c6b6e8fc302f9216a38b46baab38d0a0137606a5b7959a51326983c03d684615c5ba9c58b0e36314ec8c49cfbb  deviceinfo
 f48b8dd7297d03008f73e1ecd55b77ace535ecb03f9bdf021123b96fb5f4fb491ff4c532e226b835c8118fa8d505cc4c635a2b604a3e42a162746021552a551c  modules-initfs
@@ -244,14 +238,13 @@ e440ed7a3070c17e003b86b72dbe6d8194d01b577ca8dd56dd066f216b6dda32bb965c780950f178
 862ebc7cd2d7a1b3d41b10701b8418308c89eb0732eb99c42ec1091d48e08db9421727f67a3272b7309549798d59afb1b8d7d2fa48d1447b208fcb2329472d4d  modules.blocklist
 143c21f0b18a016d37cb44178e9daea09f128a90769b48353c03c3f245cb9b1f7e773b9ccee084973fc78ddd7a18c2642e54888a85bda7c7daecddc9a8c62eff  pointercal
 134f51d20decc0c63ab08010931a0b410b70d2f85bf6899f2ff137b1680f59f706a6287d01f5fbb41fa5309125df75a430d0783149bd1a6a1bca07d22f4f6a21  proxishot.sh
-fc21e3b7e045055c080a7f7ffb0cd4140b63a02690e92c8370dbccbef506fe271ee9584ac9f14725b8bc9fd6e74e7fafde589d2360f44491c614837472d8ad53  deviceprofile.sh
-5dab895c34599bf233635463271ea8308d434c97789efe931eec24870c3b4688fe48ca3b7cdc66e5c1a705940d042b9f18f26420b60f22e1cfad1854e97f8687  start_hook.sh
 42f916d87dd305111028992a1107bf6fe108bebbd782ae8edd065e76505db2b3a75e57515970c3e40cb0d1b7e83097a1bba92785be13df7c3fd80959a8d9c5c1  uboot-script.cmd
-9e72035c88632d12895534e5aa5746f2c130c7dcdafa8702748d62b71ed0e1b5911b6e1f07f9b9e39b6072bbb662f66aead585baa1dcacb7d8c8953ca89b6762  10-nokia-modem.rules
+465b9a0d2b46d0981c64b47cb1f656c2456a90b91b1751a2efad10af38a96030dd99108b1fd76ce31bf1ea0f236d55bed38b114d6bd712f09f8968de034c946c  10-nokia-modem.rules
+1acc441b9f83dc91fd65fa3f89b8205bfd72a465286bc181b4e7e92dd4b8c0bc5c20a18dab46ff3ee8ae70940efd7d767b3dfb920edb4c74377bd418b838693d  15-bq27k.rules
 03079030237440080e833dbfeff80327c1ad6a8129c6c730b401a3052cd00a986783ec3473a526b14ae73ba1f20653b4c7b2a6590839bfe6cc156bbbc3b7bb74  80-feedbackd-twl4030.rules
 c6012aef28b096141b924fced226ec99fb93eb53b69c064a8887d8fecdf8dc08a3ba3db399e18d88374c6ef4c59013a30699c7e4d76e5cb771040582573a0527  90-touchscreen-dev.rules
-d46adf47194c02b434cb46751003e67ee008d60978458e69b1f59dc709a7135a70f542918c29e359ba8308bdeda58a21e8efa446d06625511af05403db90e455  upower.conf
+9b99feee42dd6bdd122769994c786d3127c41e0aa3321f19c82a9d3845cf07b522908621a31cbddd9599fe18c5c37127d9b4be4255cd7fa8e0e8983bf73eb41b  upower.conf
 c7837e6688f09c7d650ac7479b8881d4bad709480a71a1dea8b5bba4f4215d6b48a3aebd3f58923bbd48813559478d4ef137dcc9838d321722e141f0aa6a6085  x11-keymap
-19694204f2f370a4132762ac1888eaf5736939bba2f12ec2bccd18dde0645cdb621dda3a0772d2ef6d26a65d14e39a628e0d23321fe3064777ad2b76ce45ed2d  xdefaults
+183dfdd545ba05e216209b1abe45e4af4e0ee16b2e73cff0e7ea7b9524ee35a1cf85213a77f32a1a94287aee6546885dbd71c6de1f4f1a1e2961e638ff27cdf6  xdefaults
 a91f98daa60efa2beb2ff6b405097f92edca5f1bbb9e7675499139be52ca2570712f8f06f9032ef29f636f99c8f8da8b992f746eab6424aac04260c16158bcc2  xorg.conf
 "
