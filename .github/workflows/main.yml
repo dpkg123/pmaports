@@ -32,12 +32,7 @@ jobs:
       - name: Merge
         continue-on-error: true
         run: |
-           git merge gitlab/master --no-commit --no-ff  ||  git commit -m "Merge changes from PostmarketOS official git web service at $(date)"
-
-      - name: Commit changes
-        continue-on-error: true
-        run: |
-           git commit -m "Merge changes from GitLab at $(date)"
+           git merge gitlab/master --no-commit --no-ff
 
       - name: GitHub Push
         continue-on-error: true
