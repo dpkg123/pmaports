@@ -1,0 +1,116 @@
+# Forked from Alpine to add systemd!
+
+pkgname=kwin
+pkgver=99996.2.4
+_pkgver=6.2.4
+pkgrel=0
+pkgdesc="An easy to use, but flexible, composited Window Manager"
+# armhf blocked by qt6-qtdeclarative
+arch="all !armhf !armv7"
+url="https://kde.org/plasma-desktop/"
+license="GPL-2.0-or-later AND (GPL-2.0-only OR GPL-3.0-only) AND LGPL-2.1-only"
+depends="
+	hwdata
+	kirigami
+	qt6-qtmultimedia
+	qt6-qtwayland
+	xwayland
+	"
+depends_dev="$pkgname
+	breeze-dev
+	fontconfig-dev
+	kcmutils-dev
+	kcompletion-dev
+	kconfig-dev
+	kconfigwidgets-dev
+	kcoreaddons-dev
+	kcrash-dev
+	kdeclarative-dev
+	kdecoration-dev
+	kglobalaccel-dev
+	ki18n-dev
+	kiconthemes-dev
+	kidletime-dev
+	kio-dev
+	knewstuff-dev
+	knotifications-dev
+	kpackage-dev
+	krunner-dev
+	kscreenlocker-dev
+	kservice-dev
+	ksvg-dev
+	ktextwidgets-dev
+	kwayland-dev
+	kwidgetsaddons-dev
+	kwindowsystem-dev
+	kxmlgui-dev
+	lcms2-dev
+	libdrm-dev
+	libepoxy-dev
+	libinput-dev
+	libplasma-dev
+	libqaccessibilityclient-dev
+	libxcvt-dev
+	libxi-dev
+	libxkbcommon-dev
+	mesa-dev
+	mesa-gbm
+	pipewire-dev
+	plasma-activities-dev
+	qt6-qtbase-dev
+	qt6-qtdeclarative-dev
+	qt6-qtdeclarative-private-dev
+	qt6-qtsensors-dev
+	wayland-dev
+	xcb-util-cursor-dev
+	xcb-util-image-dev
+	xcb-util-wm-dev
+	"
+makedepends="$depends_dev
+	extra-cmake-modules
+	kdoctools-dev
+	kglobalacceld-dev
+	kpipewire-dev
+	libcap-utils
+	libdisplay-info-dev
+	plasma-wayland-protocols
+	qt6-qttools-dev
+	samurai
+	systemd-dev
+	"
+checkdepends="xvfb-run"
+
+case "$_pkgver" in
+	*.90*) _rel=unstable;;
+	*) _rel=stable;;
+esac
+subpackages="$pkgname-dbg $pkgname-dev $pkgname-doc $pkgname-lang $pkgname-systemd"
+_repo_url="https://invent.kde.org/plasma/kwin.git"
+source="https://download.kde.org/stable/plasma/$(echo $_pkgver | cut -d . -f 1-3)/kwin-$_pkgver.tar.xz
+	"
+# Broken, fails to setup due to missing or invalid XDG_RUNTIME_DIR?
+options="!check"
+builddir="$srcdir/$pkgname-$_pkgver"
+
+build() {
+	# significantly reduce debug symbol size
+	# use None here to not make cmake pass bare -g (-g2)
+	CFLAGS="$CFLAGS -O2 -g1" CXXFLAGS="$CXXFLAGS -O2 -g1" \
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	cmake --build build
+}
+
+check() {
+	XDG_RUNTIME_DIR="$(mktemp -p -d "$builddir")" \
+	xvfb-run ctest --test-dir build --output-on-failure
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+}
+sha512sums="
+53d542b0e4a0f7981842fbcf984fad594b3cd99be3b26033ff7bf3bfebaeeb1ca9034aa7139db4305899c279e4e8d0b389248950ed37b539ee53fc59a90f4b3c  kwin-6.2.4.tar.xz
+"
