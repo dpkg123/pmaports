@@ -25,6 +25,7 @@ enable sshd.service
 enable systemd-rfkill.service
 enable tinydm.service
 enable udisks2.service
+enable cups.service
 
 # Note: technically these two shouldn't be enabled at the same time, but
 # pmos-base-wifi provides should make sure that only one is installed at the
@@ -70,13 +71,14 @@ enable iio-sensor-proxy.service
 enable hfd-service.service
 
 ## qcom
-enable pd-mapper.service
-enable tqftpserv.service
-enable qbootctl.service
-enable q6voiced.service
-enable rmtfs.service
-enable qrtr-ns.service
 enable diag-router.service
+enable msm-modem-uim-selection.service
+enable pd-mapper.service
+enable q6voiced.service
+enable qbootctl.service
+enable qrtr-ns.service
+enable rmtfs.service
+enable tqftpserv.service
 
 ## pinephone{,-pro}
 enable eg25-manager.service
