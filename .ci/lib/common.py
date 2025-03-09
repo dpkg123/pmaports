@@ -41,7 +41,9 @@ def add_upstream_git_remote():
 
 
 def commit_message_has_string(needle):
-    return needle in run_git(["show", "-s", "--format=full", "HEAD"])
+    base_commit = get_base_commit()
+
+    return needle in run_git(["log", "--pretty=format:%B", f"{base_commit}..HEAD"])
 
 
 def run_pmbootstrap(parameters):
@@ -86,12 +88,10 @@ def get_upstream_branch():
     return ret
 
 
-def get_changed_files(removed=True):
-    """ Get all changed files and print them, as well as the branch and the
-        commit that was used for the diff.
-        :param removed: also return removed files (default: True)
-        :returns: set of changed files
-    """
+def get_base_commit() -> str:
+    """Get the base commit that can be compared with HEAD to get all commits in the
+    given branch/merge request."""
+
     branch_upstream = f"upstream/{get_upstream_branch()}"
     commit_head = run_git(["rev-parse", "HEAD"])[:-1]
     commit_upstream = run_git(["rev-parse", branch_upstream])[:-1]
@@ -106,6 +106,17 @@ def get_changed_files(removed=True):
         # otherwise compare with latest common ancestor
         commit = run_git(["merge-base", branch_upstream, "HEAD"])[:-1]
     print("comparing HEAD with: " + commit)
+
+    return commit
+
+
+def get_changed_files(removed=True):
+    """ Get all changed files and print them, as well as the branch and the
+        commit that was used for the diff.
+        :param removed: also return removed files (default: True)
+        :returns: set of changed files
+    """
+    commit = get_base_commit()
 
     # Changed files
     ret = set()
