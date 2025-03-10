@@ -2,13 +2,14 @@
 # Co-Maintainer: Clayton Craft <clayton@craftyguy.net>
 pkgname=postmarketos-mkinitfs
 pkgver=2.6.1
-pkgrel=0
+pkgrel=1
 pkgdesc="Tool to generate initramfs images for postmarketOS"
 url="https://postmarketos.org"
 depends="
 	boot-deploy>=0.9
 "
-makedepends="go scdoc"
+makedepends_build="go scdoc"
+options="pmb:cross-native2"
 replaces="mkinitfs"
 
 triggers="$pkgname.trigger=\
@@ -49,12 +50,17 @@ prepare() {
 build() {
 	unset LDFLAGS  # passed to Go as linker flags, which are invalid
 
-	# For https://gitlab.com/qemu-project/qemu/-/issues/2560
+	# * Set DISABLE_GOGC=1 for e.g. aarch64 -> x86_64 for:
+	#   https://gitlab.com/qemu-project/qemu/-/issues/2560
+	# * Set CGO_ENABLED=1 to fix "-buildmode=pie requires external (cgo)
+	#   linking, but cgo is not enabled" when cross compiling with
+	#   cross-native2 from e.g. x86_64 to (armv7,riscv64,armhf). See also:
+	#   https://gitlab.alpinelinux.org/alpine/aports/-/issues/15809
 	case "$CARCH" in
 	x86_64)
-		make VERSION="$pkgver" DISABLE_GOGC=1 ;;
+		make VERSION="$pkgver" DISABLE_GOGC=1 CGO_ENABLED=1;;
 	*)
-		make VERSION="$pkgver" ;;
+		make VERSION="$pkgver" CGO_ENABLED=1;;
 	esac
 }
 
