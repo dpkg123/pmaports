@@ -17,18 +17,194 @@ deviceinfo_getty="${deviceinfo_getty:-}"
 deviceinfo_name="${deviceinfo_name:-}"
 deviceinfo_codename="${deviceinfo_codename:-}"
 deviceinfo_create_initfs_extra="${deviceinfo_create_initfs_extra:-}"
+deviceinfo_no_framebuffer="${deviceinfo_no_framebuffer:-}"
 
-# Redirect stdout and stderr to logfile
+# Does word start with prefix?
+startswith() {
+	local word="$1" prefix="$2"
+
+	case "$word" in
+		$prefix*)
+			return 0
+			;;
+	esac
+
+	return 1
+}
+
+# Does word end with suffix?
+endswith() {
+	local word="$1" suffix="$2"
+
+	case "$word" in
+		*$suffix)
+			return 0
+			;;
+	esac
+
+	return 1
+}
+
+# Parse individual items from the cmdline and take appropriate
+# action (e.g. set variables).
+parse_cmdline_item() {
+	local key="$1" value="$2"
+
+	# For information on what each cmdline argument does, please refer
+	# to https://wiki.postmarketos.org/wiki/Initramfs#Kernel_cmdline
+	case "$key" in
+		pmos.boot | pmos_boot)
+			boot_path="$value"
+			;;
+		pmos.boot_uuid | pmos_boot_uuid)
+			boot_uuid="$value"
+			;;
+		pmos.bootchart2 | PMOS_BOOTCHART2)
+			bootchart2=y
+			;;
+		pmos.debug-shell)
+			# used by init_2nd.sh
+			# shellcheck disable=SC2034
+			debug_shell=y
+			;;
+		pmos.force-partition-resize | PMOS_FORCE_PARTITION_RESIZE)
+			# used by init_functions_2nd.sh which is sourced
+			# after this script.
+			# shellcheck disable=SC2034
+			force_partition_resize=y
+			;;
+		pmos.nosplash | PMOS_NOSPLASH)
+			nosplash=y
+			;;
+		pmos.root | pmos_root)
+			root_path="$value"
+			;;
+		pmos.root_uuid | pmos_root_uuid)
+			root_uuid="$value"
+			;;
+		pmos.rootfsopts | pmos_rootfsopts)
+			# Prepend a comma since this will be appended to
+			# "rw" when passed to mount
+			rootfsopts=",$value"
+			;;
+		pmos.stowaway)
+			stowaway=y
+			;;
+		pmos.usb-storage)
+			usb_storage="$value"
+			;;
+		rd.info)
+			# used by init_functions_2nd.sh which is sourced
+			# after this script.
+			# shellcheck disable=SC2034
+			log_info=y
+			;;
+		[![:alpha:]_]* | [[:alpha:]_]*[![:alnum:]_]*)
+			# invalid shell variable, ignore it
+			;;
+		*)
+			# valid shell variable
+			# ignore these since we get all kinds of weird
+			# arguments from quirky bootloaders and we really
+			# don't want to deal with that here. Add options
+			# explicitly above instead.
+			;;
+	esac
+}
+
+process_cmdline_param() {
+	# $1: key (the cmdline parameter)
+	# $2: value (after the =)
+	local key="$1" value="$2"
+
+	# maybe unquote the value
+	# busybox ash supports string indexing
+	# shellcheck disable=SC3057
+	if startswith "$value" "[\"']" && endswith "$value" "${value:0:1}"; then
+		value="${value#?}" value="${value%?}"
+	fi
+
+	parse_cmdline_item "$key" "$value"
+}
+
+# Parse the kernel cmdline and configure the environment
+parse_cmdline() {
+	local cmdline word quoted key value
+
+	# Disable globbing so we don't accidentally expand
+	# cmdline options into paths
+	set -f
+	read -r cmdline
+	# shellcheck disable=SC2086
+	set -- $cmdline
+	set +f
+
+	# Walk over each cmdline argument
+	for word; do
+		# Handle quoted values
+		if [ -n "$quoted" ]; then
+			value="$value $word"
+		else
+			case "$word" in
+				# Easy case: key=value
+				*=*)
+					key="${word%%=*}"
+					value="${word#*=}"
+
+					if startswith "$value" "[\"']"; then
+						# busybox ash supports string indexing
+						# shellcheck disable=SC3057
+						quoted="${value:0:1}"
+					fi
+					;;
+				# A comment (only used for unit tests)
+				'#'*)
+					break
+					;;
+				# A key without a value
+				*)
+					key="$word"
+					;;
+			esac
+		fi
+
+		# If inside a quoted string, check if $value contains the closing quote
+		if [ -n "$quoted" ]; then
+			if endswith "$value" "$quoted"; then
+				unset quoted
+			else
+				# Otherwise continue reading words
+				continue
+			fi
+		fi
+
+		process_cmdline_param "$key" "$value"
+		unset key value
+	done
+
+	if [ -n "$key" ]; then
+		process_cmdline_param "$key" "$value"
+	fi
+
+	# Also set some options from deviceinfo variables
+
+	if [ "$deviceinfo_no_framebuffer" = "true" ]; then
+		nosplash=y
+	fi
+}
+
+# Redirect stdout/stderr to the log file, as well as to the kernel via
+# syslog. Additionally, if pmos.nosplash is set and there are no active
+# consoles, try to be helpful by logging to tty0 and the devices serial
+# port.
 setup_log() {
 	local console
+	local log_targets
 	console="$(cat /sys/devices/virtual/tty/console/active)"
+	log_targets="/pmOS_init.log"
 
-	# Stash fd1/2 so we can restore them before switch_root, but only if the
-	# console is not null
+	# If we have an active console, the kernel will be logging there.
 	if [ -n "$console" ] ; then
-		# The kernel logs go to the console, and we log to the kernel. Avoid printing everything
-		# twice.
-		console="/dev/null"
 		exec 3>&1 4>&2
 	else
 		# Setting console=null is a trick used on quite a few pmOS devices. However it is generally a really
@@ -38,8 +214,19 @@ setup_log() {
 		# to avoid weird bugs in daemons that read from stdin (e.g. syslog)
 		# See related: https://gitlab.postmarketos.org/postmarketOS/pmaports/-/issues/2989
 		console="/dev/$(echo "$deviceinfo_getty" | cut -d';' -f1)"
-		if ! [ -e "$console" ]; then
-			console="/dev/null"
+		if [ -e "$console" ]; then
+			log_targets="$log_targets $console"
+		fi
+
+		# If pmos.nosplash is set but there's no active console, let's try to be helpful by at least
+		# logging the initramfs output to the consoles we can find.
+		# TODO: This could be further improved by reading /dev/kmsg and outputting it as well which
+		# might help with debugging on bootloaders that do force console=null
+		if [ "$nosplash" = "y" ]; then
+			echo "Splash is disabled but no consoles are active, trying to log somewhere useful!" \
+				| tee "$console" > /dev/tty0
+			# Log to tty0 as well as the serial port we may have found above
+			log_targets="$log_targets /dev/tty0"
 		fi
 	fi
 
@@ -52,17 +239,25 @@ setup_log() {
 	# isn't blocked when a console isn't available.
 	syslogd -K < /dev/zero >/dev/zero 2>&1
 
-	local pmsg="/dev/pmsg0"
-
-	if ! [ -e "$pmsg" ]; then
-		pmsg="/dev/null"
+	# Log to ramoops as well
+	if [ -e "/dev/pmsg0" ]; then
+		log_targets="$log_targets /dev/pmsg0"
 	fi
 
 	# Redirect to a subshell which outputs to the logfile as well
 	# as to the kernel ringbuffer and pstore (if available).
 	# Process substitution is technically non-POSIX, but is supported by busybox
-	# shellcheck disable=SC3001
-	exec > >(tee /pmOS_init.log "$pmsg" "$console" | logger -t "$LOG_PREFIX" -p user.info) 2>&1
+	# We are intentionally word-splitting $log_targets into multiple arguments.
+	# shellcheck disable=SC3001,SC2086
+	exec > >(tee $log_targets | logger -t "$LOG_PREFIX" -p user.info) 2>&1
+}
+
+info() {
+	if [ "$log_info" != "y" ]; then
+		return
+	fi
+
+	echo "$@"
 }
 
 mount_proc_sys_dev() {
@@ -88,13 +283,14 @@ setup_firmware_path() {
 	# This should be sufficient on kernel 3.10+, before that we need
 	# the kernel calling udev (and in our case /usr/lib/firmwareload.sh)
 	# to load the firmware for the kernel.
-	SYS=/sys/module/firmware_class/parameters/path
-	if ! [ -e "$SYS" ]; then
+	local sysfs_dir
+	sysfs_dir=/sys/module/firmware_class/parameters/path
+	if ! [ -e "$sysfs_dir" ]; then
 		echo "Kernel does not support setting the firmware image search path. Skipping."
 		return
 	fi
 	# shellcheck disable=SC3037
-	echo -n /lib/firmware/postmarketos >$SYS
+	echo -n /lib/firmware/postmarketos >$sysfs_dir
 }
 
 # shellcheck disable=SC3043
@@ -204,6 +400,53 @@ pretty_dm_path() {
 	echo "$name"
 }
 
+# Prints the path to the partition if found, or nothing.
+find_partition() {
+	# $1: UUID of partition if known
+	# $2: path to partition
+	# $3: label of partition
+	# $4: additional blkid token to check (e.g TYPE=crypto_LUKS)
+
+	local uuid="$1"
+	local path="$2"
+	local label="$3"
+	local extra="$4"
+	local partition
+
+	if [ -n "$uuid" ]; then
+		partition="$(blkid --uuid "$uuid")"
+		if [ -z "$partition" ]; then
+			# Don't fall back to anything if the given UUID wasn't
+			# found, it might show up later but if not we should
+			# error out.
+			return
+		fi
+	fi
+
+	if [ -z "$partition" ]; then
+		if [ -e "$path" ]; then
+			partition="$path"
+		elif [ -n "$path" ]; then
+			# Don't fall back to anything if the given path wasn't
+			# found, it might show up later but if not we should
+			# error out.
+			return
+		fi
+	fi
+
+	if [ -z "$partition" ]; then
+		partition="$(blkid --label "$label")"
+	fi
+
+	if [ -z "$partition" ] && [ -n "$extra" ]; then
+		# check for arbitrary blkid tag
+		partition="$(blkid --match-token "$extra" | cut -d ":" -f 1 | head -n 1)"
+	fi
+
+	# prettify e.g. /dev/dm-0 to /dev/mapper/userdata1
+	pretty_dm_path "$partition"
+}
+
 find_root_partition() {
 	[ -n "$PMOS_ROOT" ] && echo "$PMOS_ROOT" && return
 
@@ -215,76 +458,7 @@ find_root_partition() {
 	# mount_subpartitions() must get executed before calling
 	# find_root_partition(), so partitions from b) also get found.
 
-	# Short circuit all autodetection logic if pmos_root= or
-	# pmos_root_uuid= is supplied on the kernel cmdline
-	# shellcheck disable=SC2013
-	for x in $(cat /proc/cmdline); do
-		if ! [ "$x" = "${x#pmos_root_uuid=}" ]; then
-			path="$(blkid --uuid "${x#pmos_root_uuid=}")"
-			if [ -n "$path" ]; then
-				PMOS_ROOT="$path"
-				break
-			else
-				# Don't fall back to anything if the given UUID wasn't
-				# found
-				return
-			fi
-		fi
-	done
-
-	if [ -z "$PMOS_ROOT" ]; then
-		# shellcheck disable=SC2013
-		for x in $(cat /proc/cmdline); do
-			if ! [ "$x" = "${x#pmos_root=}" ]; then
-				path="${x#pmos_root=}"
-				if [ -e "$path" ]; then
-					PMOS_ROOT="$path"
-					break
-				else
-					# Don't fall back to anything if the given UUID wasn't
-					# found
-					return
-				fi
-			fi
-		done
-	fi
-
-	# On-device installer: before postmarketOS is installed,
-	# we want to use the installer partition as root. It is the
-	# partition behind pmos_root. pmos_root will either point to
-	# reserved space, or to an unfinished installation.
-	# p1: boot
-	# p2: (reserved space) <--- pmos_root
-	# p3: pmOS_install
-	# Details: https://postmarketos.org/on-device-installer
-	if [ -n "$PMOS_ROOT" ]; then
-		next="$(echo "$PMOS_ROOT" | sed 's/2$/3/')"
-
-		# If the next partition is labeled pmOS_install (and
-		# not pmOS_deleteme), then postmarketOS is not
-		# installed yet.
-		if blkid | grep "$next" | grep -q pmOS_install; then
-			PMOS_ROOT="$next"
-		fi
-	fi
-
-	if [ -z "$PMOS_ROOT" ]; then
-		for id in pmOS_install pmOS_root; do
-			PMOS_ROOT="$(blkid --label "$id")"
-			[ -n "$PMOS_ROOT" ] && break
-		done
-	fi
-
-	# Search for luks partition.
-	# Note: This should always be after the filesystem search, since this
-	# function may be called after the luks partition is unlocked and we don't
-	# want to keep returning the luks partition if a valid root filesystem
-	# exists
-	if [ -z "$PMOS_ROOT" ]; then
-		PMOS_ROOT="$(blkid | grep "crypto_LUKS" | cut -d ":" -f 1 | head -n 1)"
-	fi
-
-	PMOS_ROOT=$(pretty_dm_path "$PMOS_ROOT")
+	PMOS_ROOT="$(find_partition "$root_uuid" "$root_path" "pmOS_root" "TYPE=crypto_LUKS")"
 	echo "$PMOS_ROOT"
 }
 
@@ -292,7 +466,7 @@ find_boot_partition() {
 	[ -n "$PMOS_BOOT" ] && echo "$PMOS_BOOT" && return
 
 	# Before doing anything else check if we are using a stowaway
-	if grep -q "pmos.stowaway" /proc/cmdline; then
+	if [ "$stowaway" = "y" ]; then
 		mount_root_partition
 		PMOS_BOOT="/sysroot/boot"
 		mount --bind /sysroot/boot /boot
@@ -301,60 +475,12 @@ find_boot_partition() {
 		return
 	fi
 
-	# Then check for pmos_boot_uuid on the cmdline
-	# this should be set on all new installs.
-	# shellcheck disable=SC2013
-	for x in $(cat /proc/cmdline); do
-		if ! [ "$x" = "${x#pmos_boot_uuid=}" ]; then
-			# Check if there is a partition with a matching UUID
-			path="$(blkid --uuid "${x#pmos_boot_uuid=}")"
-			if [ -n "$path" ]; then
-				PMOS_BOOT="$path"
-				break
-			else
-				# Don't fall back to anything if the given UUID wasn't
-				# found
-				return
-			fi
-		fi
-	done
-
-	if [ -z "$PMOS_BOOT" ]; then
-		# shellcheck disable=SC2013
-		for x in $(cat /proc/cmdline); do
-			if ! [ "$x" = "${x#pmos_boot=}" ]; then
-				# If the boot partition is specified explicitly
-				# then we need to check if it's a valid path, and
-				# fall back if not...
-				path="${x#pmos_boot=}"
-				if [ -e "$path" ]; then
-					PMOS_BOOT="$path"
-					break
-				else
-					# Don't fall back to anything if the given path doesn't
-					# exist
-					return
-				fi
-			fi
-		done
-	fi
-
-	# Finally fall back to searching by label
-	if [ -z "$PMOS_BOOT" ]; then
-		# * "pmOS_i_boot" installer boot partition (fits 11 chars for fat32)
-		# * "pmOS_inst_boot" old installer boot partition (backwards compat)
-		# * "pmOS_boot" boot partition after installation
-		for p in pmOS_i_boot pmOS_inst_boot pmOS_boot; do
-			PMOS_BOOT="$(blkid --label "$p")"
-			[ -n "$PMOS_BOOT" ] && break
-		done
-	fi
-
-	PMOS_BOOT=$(pretty_dm_path "$PMOS_BOOT")
+	PMOS_BOOT="$(find_partition "$boot_uuid" "$boot_path" "pmOS_boot")"
 	echo "$PMOS_BOOT"
 }
 
 get_partition_type() {
+	local partition
 	partition="$1"
 	blkid "$partition" | sed 's/^.*\ TYPE="\([a-zA-Z0-9_]*\)".*$/\1/'
 }
@@ -416,11 +542,14 @@ check_filesystem() {
 # /sysroot/boot (rw), after root has been mounted at /sysroot, so we can
 # switch_root to /sysroot and have the boot partition properly mounted.
 mount_boot_partition() {
+	local partition
+	local mount_opts
+
 	partition="$(find_boot_partition)"
-	local mount_opts="-o nodev,nosuid,noexec"
+	mount_opts="-o nodev,nosuid,noexec"
 
 	# We dont need to do this when using stowaways
-	if grep -q "pmos.stowaway" /proc/cmdline; then
+	if [ "$stowaway" = "y" ]; then
 		return
 	fi
 
@@ -452,6 +581,7 @@ mount_boot_partition() {
 
 # $1: initramfs-extra path
 extract_initramfs_extra() {
+	local initramfs_extra
 	initramfs_extra="$1"
 	if [ ! -e "$initramfs_extra" ]; then
 		echo "ERROR: initramfs-extra not found!"
@@ -503,6 +633,7 @@ wait_root_partition() {
 }
 
 delete_old_install_partition() {
+	local partition
 	# The on-device installer leaves a "pmOS_deleteme" (p3) partition after
 	# successful installation, located after "pmOS_root" (p2). Delete it,
 	# so we can use the space.
@@ -530,19 +661,13 @@ mount_root_partition() {
 		return
 	fi
 
-	partition="$(find_root_partition)"
-	rootfsopts=""
+	local partition
 
-	# shellcheck disable=SC2013
-	for x in $(cat /proc/cmdline); do
-		[ "$x" = "${x#pmos_rootfsopts=}" ] && continue
-		# Prepend a comma because this will be appended to "rw" below
-		rootfsopts=",${x#pmos_rootfsopts=}"
-	done
+	partition="$(find_root_partition)"
 
 	echo "Mount root partition ($partition) to /sysroot (read-write) with options ${rootfsopts#,}"
 	type="$(get_partition_type "$partition")"
-	echo "Detected $type filesystem"
+	info "Detected $type filesystem"
 
 	if ! { [ "$type" = "ext4" ] || [ "$type" = "f2fs" ] || [ "$type" = "btrfs" ]; } then
 		echo "ERROR: Detected unsupported '$type' filesystem ($partition)."
@@ -551,7 +676,7 @@ mount_root_partition() {
 	fi
 
 	if ! modprobe "$type"; then
-		echo "INFO: unable to load module '$type' - maybe it's built in"
+		info "Unable to load module '$type' - assuming it's built-in"
 	fi
 	if ! mount -t "$type" -o rw"$rootfsopts" "$partition" /sysroot; then
 		echo "ERROR: unable to mount root partition!"
@@ -568,7 +693,6 @@ mount_root_partition() {
 	fi
 
 	if ! [ -e /sysroot/etc/os-release ]; then
-		echo "ERROR: root partition appeared to mount but does not contain a root filesystem!"
 		show_splash "ERROR: root partition does not contain a root filesystem\\nhttps://postmarketos.org/troubleshooting"
 		fail_halt_boot
 	fi
@@ -576,6 +700,8 @@ mount_root_partition() {
 
 # $1: path to the hooks dir
 run_hooks() {
+	local scriptsdir
+	local hook
 	scriptsdir="$1"
 
 	if [ -z "$(ls -A "$scriptsdir" 2>/dev/null)" ]; then
@@ -583,29 +709,30 @@ run_hooks() {
 	fi
 
 	for hook in "$scriptsdir"/*.sh; do
-		echo "Running initramfs hook: $hook"
+		info "Running initramfs hook: $hook"
 		sh "$hook"
 	done
 }
 
 setup_usb_network_android() {
+	local sysfs_dir
 	# Only run, when we have the android usb driver
-	SYS=/sys/class/android_usb/android0
-	if ! [ -e "$SYS" ]; then
+	sysfs_dir=/sys/class/android_usb/android0
+	if ! [ -e "$sysfs_dir" ]; then
 		return
 	fi
 
-	echo "  Setting up USB gadget through android_usb"
+	info "  Setting up USB gadget through android_usb"
 
 	usb_idVendor="$(echo "${deviceinfo_usb_idVendor:-0x18D1}" | sed "s/0x//g")"	# default: Google Inc.
 	usb_idProduct="$(echo "${deviceinfo_usb_idProduct:-0xD001}" | sed "s/0x//g")"	# default: Nexus 4 (fastboot)
 
 	# Do the setup
-	echo "0" >"$SYS/enable"
-	echo "$usb_idVendor" >"$SYS/idVendor"
-	echo "$usb_idProduct" >"$SYS/idProduct"
-	echo "rndis" >"$SYS/functions"
-	echo "1" >"$SYS/enable"
+	echo "0" >"$sysfs_dir/enable"
+	echo "$usb_idVendor" >"$sysfs_dir/idVendor"
+	echo "$usb_idProduct" >"$sysfs_dir/idProduct"
+	echo "rndis" >"$sysfs_dir/functions"
+	echo "1" >"$sysfs_dir/enable"
 }
 
 get_usb_udc() {
@@ -638,12 +765,12 @@ setup_usb_network_configfs() {
 	local skip_udc="$1"
 
 	if ! [ -e "$CONFIGFS" ]; then
-		echo "$CONFIGFS does not exist, skipping configfs usb gadget"
+		info "usb_gadget not found in configfs, skipping gadget setup..."
 		return
 	fi
 
 	if [ -z "$(get_usb_udc)" ]; then
-		echo "  No UDC found, skipping usb gadget"
+		info "No UDC found, skipping gadget setup..."
 		return
 	fi
 
@@ -701,7 +828,7 @@ setup_usb_network() {
 	_marker="/tmp/_setup_usb_network"
 	[ -e "$_marker" ] && return
 	touch "$_marker"
-	echo "Setup usb network"
+	info "Setup usb network"
 	modprobe libcomposite
 	# Run all usb network setup functions (add more below!)
 	setup_usb_network_android
@@ -712,6 +839,8 @@ start_unudhcpd() {
 	# Only run once
 	[ "$(pidof unudhcpd)" ] && return
 
+	local usb_iface
+
 	# Skip if disabled
 	# shellcheck disable=SC2154
 	if [ "$deviceinfo_disable_dhcpd" = "true" ]; then
@@ -719,45 +848,46 @@ start_unudhcpd() {
 	fi
 
 	local client_ip="${unudhcpd_client_ip:-172.16.42.2}"
-	echo "Starting unudhcpd with server ip $HOST_IP, client ip: $client_ip"
+	info "Starting unudhcpd with server ip $HOST_IP, client ip: $client_ip"
 
 	# Get usb interface
 	usb_network_function="${deviceinfo_usb_network_function:-ncm.usb0}"
 	usb_network_function_fallback="rndis.usb0"
 	if [ -n "$(cat $CONFIGFS/g1/UDC)" ]; then
-		INTERFACE="$(
+		usb_iface="$(
 			cat "$CONFIGFS/g1/functions/$usb_network_function/ifname" 2>/dev/null ||
 			cat "$CONFIGFS/g1/functions/$usb_network_function_fallback/ifname" 2>/dev/null ||
 			echo ''
 		)"
 	else
-		INTERFACE=""
+		usb_iface=""
 	fi
-	if [ -n "$INTERFACE" ]; then
-		ifconfig "$INTERFACE" "$HOST_IP"
+	if [ -n "$usb_iface" ]; then
+		ifconfig "$usb_iface" "$HOST_IP"
 	elif ifconfig rndis0 "$HOST_IP" 2>/dev/null; then
-		INTERFACE=rndis0
+		usb_iface=rndis0
 	elif ifconfig usb0 "$HOST_IP" 2>/dev/null; then
-		INTERFACE=usb0
+		usb_iface=usb0
 	elif ifconfig eth0 "$HOST_IP" 2>/dev/null; then
-		INTERFACE=eth0
+		usb_iface=eth0
 	fi
 
-	if [ -z "$INTERFACE" ]; then
+	if [ -z "$usb_iface" ]; then
 		echo "  Could not find an interface to run a dhcp server on"
 		echo "  Interfaces:"
 		ip link
 		return
 	fi
 
-	echo "  Using interface $INTERFACE"
-	echo "  Starting the DHCP daemon"
+	info "  Using interface $usb_iface"
+	info "  Starting the DHCP daemon"
 	(
-		unudhcpd -i "$INTERFACE" -s "$HOST_IP" -c "$client_ip"
+		unudhcpd -i "$usb_iface" -s "$HOST_IP" -c "$client_ip"
 	) &
 }
 
 setup_usb_acm_configfs() {
+	local active_udc
 	active_udc="$(cat $CONFIGFS/g1/UDC)"
 
 	if ! [ -e "$CONFIGFS" ]; then
@@ -804,6 +934,8 @@ run_getty() {
 }
 
 setup_usb_storage_configfs() {
+	local active_udc
+	local storage_dev
 	active_udc="$(cat $CONFIGFS/g1/UDC)"
 	storage_dev="$1"
 
@@ -880,13 +1012,6 @@ debug_shell() {
 	Read the initramfs log with 'cat /pmOS_init.log'.
 	EOF
 
-	# Expose storage specified on cmdline on USB
-	local storage_dev=""
-	# shellcheck disable=SC2013
-	for x in $(cat /proc/cmdline); do
-		[ "$x" = "${x#pmos.usb-storage=}" ] || storage_dev="${x#pmos.usb-storage=}"
-	done
-
 	# Add pmos_logdump message only if relevant
 	if [ -n "$have_udc" ]; then
 		echo "Run 'pmos_logdump' to generate a log dump and expose it over USB." >> /README
@@ -896,8 +1021,8 @@ debug_shell() {
 		'setup_usb_storage_configfs /dev/DEVICE'
 		EOF
 
-		if [ -n "$storage_dev" ]; then
-			echo "pmos.usb-storage=$storage_dev is exposed over USB by default" >> /README
+		if [ -n "$usb_storage" ]; then
+			echo "$usb_storage is exposed over USB by default (pmos.usb-storage)" >> /README
 		fi
 	fi
 
@@ -985,7 +1110,7 @@ debug_shell() {
 	telnetd -b "${HOST_IP}:23" -l /sbin/pmos_getty &
 
 	# Set up USB mass storage if pmos.usb-storage= was specified on cmdline
-	[ -z "$storage_dev" ] || setup_usb_storage_configfs "$storage_dev"
+	[ -z "$usb_storage" ] || setup_usb_storage_configfs "$usb_storage"
 
 	# wait until we get the signal to continue boot
 	while ! [ -e /tmp/continue_boot ]; do
@@ -1033,15 +1158,8 @@ check_keys() {
 
 # $1: Message to show
 show_splash() {
-	# Skip for non-framebuffer devices
-	# shellcheck disable=SC2154
-	if [ "$deviceinfo_no_framebuffer" = "true" ]; then
-		echo "NOTE: Skipping framebuffer splashscreen (deviceinfo_no_framebuffer)"
-		return
-	fi
-
-	# Disable splash
-	if grep -q PMOS_NOSPLASH /proc/cmdline; then
+	info "SPLASH: $1"
+	if [ "$nosplash" = "y" ]; then
 		return
 	fi
 
@@ -1054,6 +1172,9 @@ show_splash() {
 }
 
 hide_splash() {
+	if [ "$nosplash" = "y" ]; then
+		return
+	fi
 	killall pbsplash 2>/dev/null
 
 	while pgrep pbsplash >/dev/null; do
@@ -1071,10 +1192,7 @@ set_framebuffer_mode() {
 }
 
 setup_framebuffer() {
-	# Skip for non-framebuffer devices
-	# shellcheck disable=SC2154
-	if [ "$deviceinfo_no_framebuffer" = "true" ]; then
-		echo "NOTE: Skipping framebuffer setup (deviceinfo_no_framebuffer)"
+	if [ "$nosplash" = "y" ]; then
 		return
 	fi
 
@@ -1094,7 +1212,7 @@ setup_framebuffer() {
 }
 
 setup_bootchart2() {
-	if grep -q PMOS_BOOTCHART2 /proc/cmdline; then
+	if [ "$bootchart2" = "y" ]; then
 		if [ -f "/sysroot/sbin/bootchartd" ]; then
 			# shellcheck disable=SC2034
 			init="/sbin/bootchartd"
