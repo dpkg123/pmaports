@@ -2,8 +2,6 @@
 
 # global settings
 image: alpine:latest
-before_script: &global_before_scripts
-  - apk upgrade -U
 after_script:
   - .ci/lib/move_logs.sh $CI_PROJECT_DIR
 stages:
@@ -21,9 +19,6 @@ variables:
 # This defines the rules for when a pipeline should run.
 workflow:
   rules:
-    # Don't run branch pipeline if an MR is open (only the MR pipeline will run)
-    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
-      when: never
     # Run for merge requests
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     # Run scheduled pipeline for autoupdate or manually triggered pipeline
@@ -37,9 +32,10 @@ include: "**/.gitlab-ci.yml"
 wiki:
   stage: lint
   rules:
-    - if: &mr_rule $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_REF_PROTECTED == "false"
+    - if: &mr_rule $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         - .ci/**/*
+        - .ci/build-jobs.yaml.j2
         - .gitlab-ci.yml
         - device/*/device-*/*
   script:
@@ -54,6 +50,7 @@ ruff:
       changes:
         - .ci/*
         - .ci/*/*
+        - .ci/build-jobs.yaml.j2
         - .gitlab-ci.yml
   script:
     - .ci/lib/gitlab_prepare_ci.sh
@@ -62,7 +59,6 @@ ruff:
 # shellcheck and various grep checks
 shellcheck-grep:
   stage: lint
-  image: alpine:edge
   rules:
     - if: *mr_rule
   script:
@@ -72,7 +68,6 @@ shellcheck-grep:
 
 editor-config:
   stage: lint
-  image: alpine:edge
   rules:
     - if: *mr_rule
   script:
@@ -137,7 +132,6 @@ mr-settings:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   before_script:
-    - *global_before_scripts
     - apk -q add python3
   script:
     - wget -q "https://gitlab.postmarketos.org/postmarketOS/ci-common/-/raw/master/check_mr_settings.py"
