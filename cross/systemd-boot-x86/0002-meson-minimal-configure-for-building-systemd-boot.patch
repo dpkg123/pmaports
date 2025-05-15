@@ -10,6 +10,11 @@ Notes:
       because that header isn't installed
     - Set libcap and libmount to required=false, they aren't needed for
       building the bootloader, and they complicate cross compilation
+
+IMPORTANT: some of these dependencies don't exist for the target arch
+(x86) and since they aren't actually required by sd-boot it's easier
+to just disable/remove them from meson.build!!!
+
 ---
  meson.build | 16 +++++++++++-----
  1 file changed, 11 insertions(+), 5 deletions(-)
