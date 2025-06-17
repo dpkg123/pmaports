@@ -7,7 +7,7 @@
 # How to add a new service file (5 steps):
 pkgname=systemd-services
 # 1. bump pkgver
-pkgver=72
+pkgver=74
 pkgrel=0
 pkgdesc="Systemd service files"
 url="https://postmarketos.org"
@@ -81,6 +81,8 @@ subpackages="
 	tailscale-systemd:_service
 	tinydm-systemd:_service
 	tqftpserv-systemd:_service
+	tuned-systemd:_service
+	tuned-ppd-systemd:_service
 	udisks2-systemd:_service
 	udiskie-systemd:_service
 	usb-moded-systemd:_service
@@ -96,6 +98,7 @@ subpackages="
 	xdg-desktop-portal-systemd:_service
 	xdg-desktop-portal-wlr-systemd:_service
 	zram-init-systemd:_service
+	sing-box-systemd:_service
 "
 # 3. Add a new entry below with the list of service files
 #    to install for that package
@@ -186,6 +189,8 @@ _syncthing_sources="user/syncthing.service"  # From https://github.com/syncthing
 _tailscale_sources="system/tailscaled.service etc/default/tailscaled"
 _tinydm_sources="system/tinydm.service"  # see issue tinydm#11
 _tqftpserv_sources="system/tqftpserv.service"
+_tuned_sources="system/tuned.service"  # From https://github.com/redhat-performance/tuned/blob/master/tuned.service
+_tuned_ppd_sources="system/tuned-ppd.service"  # From https://github.com/redhat-performance/tuned/blob/master/tuned/ppd/tuned-ppd.service
 _udisks2_sources="system/udisks2.service" # From https://github.com/storaged-project/udisks/blob/master/data/udisks2.service.in
 _udiskie_sources="user/udiskie.service"  # created, no unit file upstream
 _usb_moded_sources="system/usb_moded.service" # From usb_moded upstream
@@ -206,6 +211,12 @@ _xdg_desktop_portal_gnome_sources="user/xdg-desktop-portal-gnome.service"
 _xdg_desktop_portal_kde_sources="user/plasma-xdg-desktop-portal-kde.service" # From https://invent.kde.org/plasma/xdg-desktop-portal-kde/-/blob/master/data/plasma-xdg-desktop-portal-kde.service.in
 _xdg_desktop_portal_wlr_sources="user/xdg-desktop-portal-wlr.service"
 _zram_init_sources="system/zram_swap.service"  # adapted from https://github.com/vaeth/zram-init/blob/main/systemd/system/zram_swap.service
+_sing_box_sources="
+	system/sing-box.service
+	system/sing-box@.service
+	tmpfiles.d/sing-box.conf
+	sysusers.d/sing-box.conf
+" # From https://github.com/SagerNet/sing-box/tree/dev-next/release/config
 
 flatpath() {
 	local i
@@ -275,6 +286,8 @@ source="$(flatpath \
 	$_tailscale_sources \
 	$_tinydm_sources \
 	$_tqftpserv_sources \
+	$_tuned_sources \
+	$_tuned_ppd_sources \
 	$_udisks2_sources \
 	$_udiskie_sources \
 	$_usb_moded_sources \
@@ -290,6 +303,7 @@ source="$(flatpath \
 	$_xdg_desktop_portal_sources \
 	$_xdg_desktop_portal_wlr_sources \
 	$_zram_init_sources \
+	$_sing_box_sources \
 )"
 
 _service() {
@@ -306,6 +320,8 @@ _service() {
 		if echo "user system" | grep -q "${f%%/*}"; then
 			prefix="$prefix/usr/lib/systemd"
 		elif echo "tmpfiles.d" | grep -q "${f%%/*}"; then
+			prefix="$prefix/usr/lib"
+		elif echo "sysusers.d" | grep -q "${f%%/*}"; then
 			prefix="$prefix/usr/lib"
 		elif echo "user-environment-generators system-environment-generators" | grep -q "${f%%/*}"; then
 			prefix="$prefix/usr/lib/systemd"
@@ -413,6 +429,8 @@ be9df5e3fd9c88ec1a8db4aa2d9e8075d74ee3d2670aa3cfc611df3cff4d4041ac888a0338c9d5f1
 de63ecafaffc675f21d2a4b1e6b7e2c5464c03f7b2f79094d7f719c295190ac28b3cd85ba99a17bb9042d77ec323a6ffb5f108e33d28b6e7820d09250daadd57  etc-default-tailscaled
 23f854fa2d0e0cb4de54db8605e549bb32061470ea7fa8ac16d474149be635e2b20a815c4ea8088e583693d7f515651ad2872b45f3b38a762f686b977d4fc49d  system-tinydm.service
 c569b27925297672c479e12a6425abdf5791886fff77c2c2b67b7aa9277eb0a22e7b95b52dbc225870c97460d0988a4dae18ed864e19096c704c0895de55b699  system-tqftpserv.service
+a6154846b26445d4da8ef59364b8b43a2d64db7edc6726f094ff0f8688c832444a1e666c77a142bb66c11c226b45f29ad2000395bf69662fbbce9044c7dcadb0  system-tuned.service
+8d55230785dab9d37abc57b996af962333f493c516285f1b674788659915a5b83c7de48773da918ac7cbcc49b02c833c2e36d19e29b48911c96315b8927bcf45  system-tuned-ppd.service
 c7ea2b18c9d8f82306fbaca6d07b7019de3819d7898c3f50c3d0aceef4da4d311ed3bf31385e2f8998b8e3e326b1eb13309ffd44cf1b2d9db9b40bca00222c16  system-udisks2.service
 4c43a308e9e653914e534d92fc8caaf8c60cd21ae57bdbbf2fa591c1bd6a41e502268b6e0ff17b19cbe301fc7cfa1ad43070f13b372376fa3ddee9d11bf76f5a  user-udiskie.service
 be47b824125cc54d2e1c879f59421f3c549e3f42c92a53f7117968a861403edf60c9e3bf54fd54a69997ccb22dce6f891d993aec606070884e3ff6da2ac8a5b1  system-usb_moded.service
@@ -431,4 +449,8 @@ e09a3c76f3be961dce9f564bb654ea84d1d7fb59907a2168c0569bf6c17a5ebe9fbe4d1f94f1d014
 1262f10b97989be726432700a923d7717570feb7b0d78c3c573e21ee6be320f5a618d0d21c1eb351702397caa95b476b8854bf83545993fb464b4a7a80067800  user-xdg-permission-store.service
 744c60fdc6e53ba2c9f370ce8462e1a420cfea973edff49d0caf7a3e65f0f35257d61b5ae3ace3e9d9d48e382cb54d9f2ff96ad02d5e16758a49ba2e07963e5a  user-xdg-desktop-portal-wlr.service
 e0014662e4ec2c52d3beabe3247ede7c6b12c1d22b7c62d6b04ff82a668f492c09060243acf92090e6a7ec75a44b41760b3bbd144da4f36c14364cfa28a8dac3  system-zram_swap.service
+4d201f29ad98abf38a15e877bb1b4f46fb08ab0cd5cb83f29aaa104eaa0a51fd14784110ee844ccb89914aa73b985fc9c61e216f8d2ac230adfa1d1660ebd573  system-sing-box.service
+f4042114ed0f36e51bc32f6df184843d6d7e58b7cece8a845796910d80e1f26c9d0be9415ed90f7a91211bd669d8bb002b24a5a79657f8b699f952299ddfb5d2  system-sing-box@.service
+e67997cfad302af405e1bee78f79ea9caaa8fec0b765003ff08901f43a2ea07209726d0a20f2640b796bc6775606e34143da362d1e0471ce32b919747004d53c  tmpfiles.d-sing-box.conf
+014eff9e21ddaa64260f3915655e0a1fa771b356c0c56b3a5d868830237a561ba3e5cc06085bf70dde9dbf809807c301addd0a968a005436c067b6ce0a52672d  sysusers.d-sing-box.conf
 "
